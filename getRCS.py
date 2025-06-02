@@ -54,7 +54,7 @@ def Bistatic_RCS(radius, frequency, background_material, sphere_material, distan
           Theta = pi is the radial direction to the source point. 
           Plot saved as a .png file, data saved to .txt file.
     '''
-    nang = 100
+    nang = 300
     theta = np.linspace(0,np.pi,nang)
     #distance = 2000
     #phi = 0
@@ -69,6 +69,7 @@ def Bistatic_RCS(radius, frequency, background_material, sphere_material, distan
             getDielectricSphereFieldUnderPlaneWave(radius, sphere_material, background_material, sensor_location, frequency)
         E = (np.stack((E_r,E_theta,E_phi), axis=0))
         bi_RCS[k] = 4*np.pi* ( norm(sensor_location)**2 ) * np.sum( (E * np.conj(E)))
+        # bi_RCS[k] = 4 * np.pi * np.sum( (E * np.conj(E)))
 
     #plotting and saving plot
     if save_filename:
@@ -186,7 +187,7 @@ def plotBiRCS(radius, sphere, frequency, bi_RCS, theta, savefile =None):
             ", radius = " + str(round(radius,2))+ " m)"    )
     
     if (savefile):
-        plt.savefig(savefile, figsize=(8,6)) 
+        plt.savefig(savefile) 
     plt.show()
 
 def saveMonoRCSData(savefile, mono_RCS, frequency, sphere, radius):
