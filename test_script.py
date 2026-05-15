@@ -37,7 +37,7 @@ if __name__ == "__main__":
     # ratio = np.arange(0.01,1.61,0.01)
     vacuum = DielectricMaterial(1,0)
     background = vacuum
-    pec = DielectricMaterial(1e8,0,1e-8,0)
+    pec = DielectricMaterial(1e8,0,1,0)
     sphere_material = pec
     observer = [0,0,-2000]
     angle = 0.0 #phi

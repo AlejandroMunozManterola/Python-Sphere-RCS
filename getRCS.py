@@ -1,5 +1,7 @@
 from getDielectricSphereFieldUnderPlaneWave import *
+from getCoatedSphereFieldUnderPlaneWave import *
 from DielectricMaterial import *
+from CoatedSphere import *
 from src import *
 from TestCase import *
 import matplotlib.pyplot as plt
@@ -631,6 +633,190 @@ def plotFromFile(filenames, plt_type, save_file=''):
         print("incorrect plt_type input to plotFromFile()")
 
 
+def RCS_vs_freq_shell(coated_sphere, ratio, background_material, sensor_location, save_file=None, show_plot=1):
+    '''
+        Calculates the RCS vs frequency for a coated sphere defined by
+        'coated_sphere' (CoatedSphere object) located at the origin.
+        The incident wavelengths are defined using argument 'ratio',
+        where ratio is outer_radius / wavelength.
+
+        Saves the plot of RCS vs frequency along with the data as a text file to 'save_file'.
+    '''
+    wavelength = coated_sphere.radius / ratio
+    frequency = background_material.getPhaseVelocity(3e8 / wavelength) / wavelength
+
+    [E_r, E_theta, E_phi, H_r, H_theta, H_phi] = \
+        getCoatedSphereFieldUnderPlaneWave(coated_sphere, background_material, sensor_location, frequency)
+    E = (np.stack((E_r, E_theta, E_phi), axis=0))
+    mono_RCS = 4 * np.pi * (norm(sensor_location) ** 2) * np.sum((E * np.conj(E)), 0)
+
+    if show_plot:
+        plotOneMonoRCS_shell(coated_sphere, background_material, mono_RCS, frequency=frequency, savefile=save_file)
+
+    if save_file:
+        saveMonoRCSData_shell(save_file, mono_RCS, frequency, coated_sphere, coated_sphere.core_radius)
+
+    return (frequency, mono_RCS)
+
+
+def plotOneMonoRCS_shell(coated_sphere, background, mono_RCS, *args, **kwargs):
+    '''
+        Plots the monostatic RCS for a single coated sphere.
+        Can select different x-axis plotting presets:
+            frequency (logarithmic)
+            wavelength (logarithmic)
+            ratio (normal)
+    '''
+    frequency = np.atleast_1d(kwargs.get('frequency', []))
+    ratio = np.atleast_1d(kwargs.get('ratio', []))
+    wavelength = np.atleast_1d(kwargs.get('wavelength', []))
+    savefile = kwargs.get('savefile', '')
+
+    if (frequency.size > 0):
+        xseries = frequency
+    elif (ratio.size > 0):
+        xseries = ratio
+    elif (wavelength.size > 0):
+        xseries = wavelength
+    else:
+        print("wrong input (in plotOneMonoRCS_shell)")
+        return
+
+    plt.grid(True, which="both", ls="--")
+    plt.ylabel(r'Mono-Static RCS ($m^2$)')
+
+    if (frequency.size > 0):
+        plt.loglog(xseries, mono_RCS)
+        plt.xlabel("Frequency (Hz)")
+    elif (ratio.size > 0):
+        plt.semilogy(xseries, mono_RCS)
+        plt.xlabel("Outer radius in wavelengths")
+    elif (wavelength.size > 0):
+        plt.loglog(xseries, mono_RCS)
+        plt.xlabel("Wavelength (m)")
+
+    title_str = "Coated Sphere"
+
+    core = coated_sphere.core_material
+    shell = coated_sphere.shell_material
+
+    if core.name:
+        core_label = core.name
+    else:
+        core_label = r'$\epsilon_r$=' + str(round(core.epsilon_r, 2)) + r', $\sigma$=' + "{0:.2f}".format(core.sigma_e) + " S/m"
+
+    if shell.name:
+        shell_label = shell.name
+    else:
+        shell_label = r'$\epsilon_r$=' + str(round(shell.epsilon_r, 2)) + r', $\sigma$=' + "{0:.2f}".format(shell.sigma_e) + " S/m"
+
+    title_str += "\nCore (" + core_label + ", r=" + str(round(coated_sphere.core_radius, 4)) + " m)"
+    title_str += "\nShell (" + shell_label + ", w=" + str(round(coated_sphere.shell_width, 6)) + " m)"
+
+    if background and background.name:
+        title_str += " in " + background.name
+
+    plt.title(title_str)
+
+    if (savefile):
+        if not (savefile.endswith(".png")):
+            savefile += ".png"
+        plt.savefig(savefile, dpi=80)
+    plt.show()
+
+
+def saveMonoRCSData_shell(savefile, mono_RCS, frequency, coated_sphere, core_radius):
+    '''
+        Writes monostatic RCS data for a coated sphere to a text file.
+
+        Header includes core and shell parameters separately for clarity.
+    '''
+    if (not savefile.endswith(".txt")):
+        savefile += ".txt"
+    data_file = open(savefile, "w")
+
+    core = coated_sphere.core_material
+    shell = coated_sphere.shell_material
+
+    header_line = "core_eps_r\t" + str(round(core.epsilon_r, 2)) + \
+                  "\tcore_mu_r\t" + str(round(core.mu_r, 2)) + \
+                  "\tcore_sigma\t" + "{0:.2e}".format(core.sigma_e) + \
+                  "\tshell_eps_r\t" + str(round(shell.epsilon_r, 2)) + \
+                  "\tshell_mu_r\t" + str(round(shell.mu_r, 2)) + \
+                  "\tshell_sigma\t" + "{0:.2e}".format(shell.sigma_e) + \
+                  "\tcore_radius\t" + str(round(core_radius, 4)) + \
+                  "\tshell_width\t" + str(round(coated_sphere.shell_width, 6)) + \
+                  "\tradius\t" + str(round(coated_sphere.radius, 4)) + "\n"
+    data_file.write(header_line)
+
+    column_headers = "frequency(Hz)\tRCS(m^2)\n"
+    data_file.write(column_headers)
+
+    mono_RCS = mono_RCS.flatten()
+    frequency = frequency.flatten()
+    n = min(len(frequency), len(mono_RCS))
+
+    for i in range(0, n):
+        line = "{:.9e}".format(frequency[i]) + "\t" + "{:.9e}".format(np.real(mono_RCS[i])) + "\n"
+        data_file.write(line)
+
+    data_file.close()
+
+
+def Compare_RCS_vs_freq_shell(test_cases, test_parameters, save_file=None):
+    '''
+        Plots several different monostatic RCS vs frequency series on the same figure
+        for coated spheres.
+
+        Inputs:
+            test_cases:       list of TestCase objects defining coated spheres
+            test_parameters:  TestParameters object with sensor_location and frequency
+            save_file:        filename to save the plot (optional)
+    '''
+    fig, ax = plt.subplots()
+    legend_entries = []
+    for case in test_cases:
+        [E_r, E_theta, E_phi, H_r, H_theta, H_phi] = \
+            getCoatedSphereFieldUnderPlaneWave(case.coated_sphere, case.background_material,
+                                               test_parameters.sensor_location, test_parameters.frequency)
+        E = (np.stack((E_r, E_theta, E_phi), axis=0))
+        mono_RCS = 4 * np.pi * (norm(test_parameters.sensor_location) ** 2) * np.sum((E * np.conj(E)), 0)
+
+        plt.loglog(test_parameters.frequency, mono_RCS)
+
+        series_name = "Coated Sphere"
+        core = case.coated_sphere.core_material
+        shell = case.coated_sphere.shell_material
+
+        if core.name:
+            core_label = core.name
+        else:
+            core_label = r'$\epsilon_r$=' + str(round(core.epsilon_r, 2))
+
+        if shell.name:
+            shell_label = shell.name
+        else:
+            shell_label = r'$\epsilon_r$=' + str(round(shell.epsilon_r, 2))
+
+        series_name += " Core(" + core_label + ")" + " Shell(" + shell_label + ")"
+
+        if case.background_material and case.background_material.name:
+            series_name += " in " + case.background_material.name
+
+        legend_entries.append(series_name)
+
+    plt.grid(True, which="both", ls="--")
+    plt.ylabel(r'Mono-Static RCS ($m^2$)')
+    plt.xlabel("Frequency (Hz)")
+    plt.legend(legend_entries, loc='best')
+    plt.title("Monostatic RCS Comparison for Different Coated Spheres")
+
+    if (save_file):
+        save_filename = save_file + ".png"
+        plt.savefig(save_filename, figsize=(8, 6))
+    plt.show()
+
+
 if __name__ == '__main__':
 
     '''
@@ -643,7 +829,7 @@ if __name__ == '__main__':
     
     sensor_location = [0,0,-1000]
     sphere = DielectricMaterial(2.56, 0.0)
-    sphere = DielectricMaterial(1e8,0,1e-8,0)
+    sphere = DielectricMaterial(1e8,0,1,0)
    
     [E_r, E_theta, E_phi, H_r, H_theta, H_phi] = \
         getDielectricSphereFieldUnderPlaneWave(radius, sphere, background, sensor_location, frequency)
@@ -672,7 +858,7 @@ if __name__ == '__main__':
     '''
     
     #testing PEC sphere
-    #(freq, mono_RCS) = RCS_vs_freq(radius = 0.5, ratio = np.arange(0.01,1.61,0.01), background_material = DielectricMaterial(1,0), sphere_material = DielectricMaterial(1e8,0,1e-8,0), sensor_location = [0,0,-2000], save_file = None, show_plot = 1)
+    #(freq, mono_RCS) = RCS_vs_freq(radius = 0.5, ratio = np.arange(0.01,1.61,0.01), background_material = DielectricMaterial(1,0), sphere_material = DielectricMaterial(1e8,0,1,0), sensor_location = [0,0,-2000], save_file = None, show_plot = 1)
 
     #testing plot with ratio on x axis
     '''

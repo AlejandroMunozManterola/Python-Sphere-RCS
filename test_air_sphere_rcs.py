@@ -20,7 +20,7 @@ if __name__ == "__main__":
     print("------\nAIR SPHERE MONOSTATIC RCS TEST\n------\n")
 
     radius = 1.0
-    frequency = np.linspace(1e6, 1e9, 301)
+    frequency = np.linspace(1e7, 4e8, 301)
     vacuum = DielectricMaterial(1.0, 0.0)
     air = DielectricMaterial(1.0, 0.0, 1.0, 0.0, name="Air")
     sensor_location = [0, 0, -2000]

@@ -21,9 +21,9 @@ if __name__ == "__main__":
     print("------\nPEC SPHERE MONOSTATIC RCS TEST\n------\n")
 
     radius = 1.0
-    frequency = np.linspace(1e7, 1e9, 301)
+    frequency = np.linspace(1e7, 4e8, 301)
     vacuum = DielectricMaterial(1.0, 0.0)
-    pec = DielectricMaterial(1e8, 0.0, 1e-8, 0.0, name="PEC")
+    pec = DielectricMaterial(1e8, 0.0, 1.0, 0.0, name="PEC")
     sensor_location = [0, 0, -2000]
 
     c0 = 299792458.0

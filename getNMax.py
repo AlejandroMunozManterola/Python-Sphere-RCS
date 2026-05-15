@@ -49,13 +49,24 @@ def getNMax(radius, sphere, background, frequency):
             N_stop = 20000 + 4.*20000**(1/3) + 2
         
         #this is the KZHU original nmax formula (adapted for single sphere)
-        #it recommends 100's of terms for real metals
-        N_max[k] = max(N_stop, abs(m[k] * x[k]) )+15
+        #it recommends additional terms for high-index materials
+        n_kzhu = abs(m[k] * x[k]) + 15
+
+        # Cap N_max to prevent explosion for PEC-like materials (n >> 1)
+        # The Wiscombe N_stop already ensures convergence; the KZHU term
+        # is unnecessary for electrically large, highly conductive objects
+        # since the Mie coefficients decay rapidly beyond N ~ x.
+        N_max[k] = max(N_stop, min(n_kzhu, 500))
 
         #this is the Wiscombe-only implementation, seems to be accurate enough
         #N_max[k] = N_stop
         
-    return math.ceil(max(N_max))
+    # Use max of Wiscombe N_stop values (ensures convergence for largest x)
+    # but cap at 150 to avoid numerical instability of ric_bessely for
+    # small arguments at high order (nu > ~x + 150 produces NaN)
+    wiscombe_max = max([x[k] + 4.*x[k]**(1/3) + 2 if x[k] >= 8 else x[k] + 4.*x[k]**(1/3) + 1 if x[k] >= 0.02 else 3 for k in range(M)])
+    N_final = min(int(math.ceil(wiscombe_max)), 150)
+    return max(N_final, 3)
 
 
 if __name__ == "__main__":

@@ -29,7 +29,8 @@ class DielectricMaterial:
             self.name = "vacuum"
         
         if (self.epsilon_r > 1e5 and self.mu_r < 1e-5 and \
-            self.epsilon_r * self.mu_r == 1):
+            self.epsilon_r * self.mu_r == 1) or \
+           (self.epsilon_r > 1e5 and self.mu_r >= 0.99 and self.mu_r <= 1.01):
             self.name = "PEC"
 
 
