@@ -7,17 +7,52 @@ class DielectricMaterial:
     '''
     
 
-    def __init__(self, epsilon_r, sigma_e, mu_r=1, sigma_m=0, name=""):
+    def __init__(
+        self,
+        epsilon_r,
+        sigma_e,
+        mu_r=1,
+        sigma_m=0,
+        name="",
+        epsilon_r_complex=None,
+        loss_tangent=None,
+    ):
         '''
             epsilon_r:  dielectric permittivity of material in steady state
             sigma_e:    electronic conductivity of material
-            mu_r:       relative magnetic permeability in steady state 
+            mu_r:       relative magnetic permeability in steady state
                         (assumed to be 1)
-            sigma_m:    magnetic conductivity? 
+            sigma_m:    magnetic conductivity?
                         (assumed to be 0)
+            epsilon_r_complex:
+                        optional complex relative permittivity. If provided,
+                        the dispersive part is taken directly from this value.
+            loss_tangent:
+                        optional dielectric loss tangent tan(delta).
+                        Uses epsilon_r * (1 - j*tan(delta)).
+
+            Notes:
+                - Provide either epsilon_r_complex OR loss_tangent OR sigma_e
+                  for electric losses. Mixing these can double-count losses and
+                  is not allowed.
         '''
-        self.epsilon_r = epsilon_r
-        self.sigma_e = sigma_e
+        if epsilon_r_complex is not None and loss_tangent is not None:
+            raise ValueError("Use either epsilon_r_complex or loss_tangent, not both.")
+
+        if epsilon_r_complex is not None and sigma_e != 0:
+            raise ValueError("sigma_e must be 0 when epsilon_r_complex is provided.")
+
+        if loss_tangent is not None and sigma_e != 0:
+            raise ValueError("sigma_e must be 0 when loss_tangent is provided.")
+
+        if np.iscomplexobj(epsilon_r) and epsilon_r_complex is None:
+            epsilon_r_complex = complex(epsilon_r)
+            epsilon_r = float(np.real(epsilon_r_complex))
+
+        self.epsilon_r = float(np.real(epsilon_r))
+        self.epsilon_r_complex = None if epsilon_r_complex is None else complex(epsilon_r_complex)
+        self.loss_tangent = None if loss_tangent is None else float(loss_tangent)
+        self.sigma_e = float(sigma_e)
         self.mu_r = mu_r
         self.sigma_m = sigma_m
         self.eps_0 = 8.8541878176e-12
@@ -75,6 +110,14 @@ class DielectricMaterial:
 
             Note: will fail for frequency = 0
         '''
+        frequency = np.asarray(frequency)
+
+        if self.epsilon_r_complex is not None:
+            return np.full_like(frequency, self.epsilon_r_complex, dtype=np.complex128)
+
+        if self.loss_tangent is not None:
+            return self.epsilon_r * (1 - 1j * self.loss_tangent)
+
         epsilon_r = self.epsilon_r + self.sigma_e / (1j*2*np.pi*frequency * self.eps_0)
         return epsilon_r
     
@@ -104,10 +147,10 @@ class DielectricMaterial:
         '''
         return (self.mu_r, self.sigma_m)
     
-    def getPermeability(self):
-        ''' returns the object's dielectric permittivity
+    def getPermittivity(self):
+        ''' returns the object's dielectric permittivity model parameters
         '''
-        return (self.epsilon_r, self.sigma_e)
+        return (self.epsilon_r, self.sigma_e, self.epsilon_r_complex, self.loss_tangent)
     
 
     def getPhaseVelocity(self, frequency):
